@@ -1,0 +1,9 @@
+node_modules
+dist
+.vercel
+__pycache__
+*.pyc
+.DS_Store
+scripts/raw.csv
+.cache
+scripts/geocode-cache.json

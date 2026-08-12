@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mapa de calor — Escolas alvo 2026</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"
+    />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="sidebar-top">
+          <header class="brand">
+            <p class="eyebrow">Carteira 2026</p>
+            <h1>Escolas prospectadas</h1>
+            <p class="lede">
+              Prioridade = ticket ≥ R$ 300 (50 pts) + mais alunos (até 50 pts).
+            </p>
+          </header>
+
+          <section class="stats" id="stats"></section>
+
+          <form class="filters" id="filters">
+            <label>
+              Busca
+              <input
+                type="search"
+                name="q"
+                placeholder="Nome, bairro ou cidade"
+                autocomplete="off"
+              />
+            </label>
+            <label class="check">
+              <input type="checkbox" name="ticketAlto" />
+              Só ticket ≥ R$ 300
+            </label>
+            <label>
+              Mínimo de alunos
+              <input type="number" name="minAlunos" min="0" step="1" placeholder="0" />
+            </label>
+            <label>
+              Cidade
+              <select name="cidade">
+                <option value="">Todas</option>
+              </select>
+            </label>
+          </form>
+        </div>
+
+        <section class="list-panel">
+          <div class="list-head">
+            <h2>Ordem de visita</h2>
+            <span id="listCount"></span>
+          </div>
+          <ol class="rank" id="rank"></ol>
+        </section>
+      </aside>
+      <main class="map-wrap">
+        <div id="map"></div>
+        <p class="map-note" id="geoNote"></p>
+      </main>
+    </div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
