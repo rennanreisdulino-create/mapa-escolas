@@ -94,7 +94,15 @@ function renderMap(escolas) {
   clusters.clearLayers();
   markersById = new Map();
   const heat = [];
-  const withGeo = escolas.filter((e) => e.lat != null && e.lng != null);
+  const withGeo = escolas.filter(
+    (e) =>
+      e.lat != null &&
+      e.lng != null &&
+      e.lat >= -8.7 &&
+      e.lat <= -7.3 &&
+      e.lng >= -35.55 &&
+      e.lng <= -34.7
+  );
 
   for (const escola of withGeo) {
     const intensity = Math.max(0.15, (escola.score || 0) / 100);

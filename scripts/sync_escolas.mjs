@@ -178,7 +178,22 @@ async function geocodeOne(school, cache) {
   if (school.cepDigits.length === 8) keys.push(`cep:${school.cepDigits}`);
   keys.push(`q:${school.geoQuery}`);
   for (const key of keys) {
-    if (Object.prototype.hasOwnProperty.call(cache, key)) return cache[key];
+    if (Object.prototype.hasOwnProperty.call(cache, key)) {
+      const cached = cache[key];
+      if (cached && isCoordNaRegiao(cached.lat, cached.lng)) return cached;
+      if (cached && !isCoordNaRegiao(cached.lat, cached.lng)) {
+        // cache antigo com ponto fora da RMR — ignora
+        continue;
+      }
+      return cached;
+    }
+  }
+
+  // Só "Pernambuco, Brasil" vira o centroide do estado — não geocodificar.
+  const query = school.geoQuery || "";
+  if (!school.cepDigits && /^pernambuco,\s*brasil$/i.test(query.trim())) {
+    for (const key of keys) cache[key] = null;
+    return null;
   }
 
   let result = null;
@@ -190,9 +205,13 @@ async function geocodeOne(school, cache) {
       await sleep(120);
     }
   }
-  if (!result && school.geoQuery) {
+  if (!result && school.geoQuery && !/^pernambuco,\s*brasil$/i.test(query.trim())) {
     result = await geocodeNominatim(school.geoQuery);
     await sleep(1050);
+  }
+
+  if (result && !isCoordNaRegiao(result.lat, result.lng)) {
+    result = null;
   }
 
   for (const key of keys) cache[key] = result;
@@ -220,10 +239,32 @@ function isEscolaPublica(school) {
   return false;
 }
 
+/** Linhas de resumo / lixo da planilha (não são escolas reais). */
+function isLinhaLixo(school) {
+  const nome = (school.nome || "").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().trim();
+  if (!nome) return true;
+  if (
+    /^(grupos? de divisao|grupo [a-d]|publico e privado|numerologia|total de escolas|quantas do grupo)/.test(
+      nome
+    )
+  ) {
+    return true;
+  }
+  const hasPlace = Boolean(school.endereco || school.bairro || school.cidade || school.cepDigits);
+  if (!hasPlace) return true;
+  return false;
+}
+
+/** RMR / litoral de PE — rejeita ponto no interior do estado (ex.: centroide "Pernambuco"). */
+function isCoordNaRegiao(lat, lng) {
+  return lat >= -8.7 && lat <= -7.3 && lng >= -35.55 && lng <= -34.7;
+}
+
 function rowsToSchools(rows) {
   const headers = rows[0].map((h) => h.trim());
   const schools = [];
   let skippedPublic = 0;
+  let skippedJunk = 0;
   for (let i = 1; i < rows.length; i++) {
     const raw = {};
     headers.forEach((h, idx) => {
@@ -256,11 +297,18 @@ function rowsToSchools(rows) {
       alunos: parseAlunos(col(raw, "ALUNADO")),
       geoQuery,
     };
+    if (isLinhaLixo(school)) {
+      skippedJunk += 1;
+      continue;
+    }
     if (isEscolaPublica(school)) {
       skippedPublic += 1;
       continue;
     }
     schools.push(school);
+  }
+  if (skippedJunk) {
+    console.log(`Ignoradas ${skippedJunk} linhas inválidas (resumo/sem endereço)`);
   }
   if (skippedPublic) {
     console.log(`Ignoradas ${skippedPublic} escolas públicas (estadual/municipal/OBS pública/EJA etc.)`);
