@@ -199,9 +199,31 @@ async function geocodeOne(school, cache) {
   return result;
 }
 
+/** Escolas da rede pública / fora do fluxo comercial (estadual, municipal, EJA pública etc.). */
+function isEscolaPublica(school) {
+  const status = (school.status || "").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+  const obs = (school.obs || "").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+  const nome = (school.nome || "").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+
+  if (/colegio estadual|colegio municipal|escola estadual|escola municipal|publico adulto/.test(status)) {
+    return true;
+  }
+  if (/^publica\b|\bppublica\b|\bpublica\b|\brede publica\b/.test(obs)) {
+    return true;
+  }
+  if (
+    /\b(escola|colegio)\s+(municipal|estadual)\b/.test(nome) ||
+    /\bescola tecnica estadual\b/.test(nome)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 function rowsToSchools(rows) {
   const headers = rows[0].map((h) => h.trim());
   const schools = [];
+  let skippedPublic = 0;
   for (let i = 1; i < rows.length; i++) {
     const raw = {};
     headers.forEach((h, idx) => {
@@ -217,7 +239,7 @@ function rowsToSchools(rows) {
     const queryParts = [endereco, bairro, cidade, "Pernambuco", "Brasil"].filter(Boolean);
     let geoQuery = queryParts.join(", ");
     if (cepDigits) geoQuery += `, ${cepDigits}`;
-    schools.push({
+    const school = {
       id: i + 1,
       nome,
       endereco,
@@ -233,7 +255,15 @@ function rowsToSchools(rows) {
       ticket: parseTicket(col(raw, "TICKET")),
       alunos: parseAlunos(col(raw, "ALUNADO")),
       geoQuery,
-    });
+    };
+    if (isEscolaPublica(school)) {
+      skippedPublic += 1;
+      continue;
+    }
+    schools.push(school);
+  }
+  if (skippedPublic) {
+    console.log(`Ignoradas ${skippedPublic} escolas públicas (estadual/municipal/OBS pública/EJA etc.)`);
   }
   return schools;
 }

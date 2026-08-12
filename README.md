@@ -17,6 +17,8 @@ npm run dev
 
 A planilha pública é lida em CSV. Endereços são geocodificados uma vez (CEP via BrasilAPI/AwesomeAPI, fallback Nominatim) e gravados em `public/escolas.json`.
 
+Escolas da **rede pública** são ignoradas no sync (status estadual/municipal, OBS “publica” / EJA pública, nomes “Escola Municipal/Estadual”, etc.).
+
 ## Publicação (Vercel)
 
 Build pronto em `dist/`. Para publicar:
