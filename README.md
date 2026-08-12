@@ -19,6 +19,16 @@ A planilha pública é lida em CSV. Endereços são geocodificados uma vez (CEP 
 
 Escolas da **rede pública** são ignoradas no sync (status estadual/municipal, OBS “publica” / EJA pública, nomes “Escola Municipal/Estadual”, etc.).
 
+## Acesso
+
+Login nativo no código (`src/auth.js`), sem banco. E-mails autorizados:
+
+- `taffarel@dulino.com.br`
+- `priscilaramos@dulino.com.br`
+- `rennanreis@dulino.com.br`
+
+Senha compartilhada: `Dulino@2026` (altere em `src/auth.js` se quiser).
+
 ## Publicação (Vercel)
 
 Build pronto em `dist/`. Para publicar:
@@ -33,12 +43,16 @@ Na primeira vez, o Vercel pede login no navegador. Depois disso você recebe um 
 
 ## Atualizar dados
 
-Quando a planilha mudar:
+**Automático:** uma GitHub Action roda **todo dia às 11h (Brasília)** e também pode ser disparada manualmente em *Actions → Sync planilha → Run workflow*. Se a planilha mudou, ela atualiza `public/escolas.json` e faz push no GitHub. Com Vercel conectado ao repo, o site redeploya sozinho.
+
+**Manual:**
 
 ```bash
 npm run sync
 npm run build
-npm run deploy
+git add public/escolas.json scripts/geocode-cache.json
+git commit -m "Atualiza escolas da planilha"
+git push
 ```
 
-O cache de geocodificação fica em `scripts/geocode-cache.json` — só endereços novos são consultados de novo.
+O cache de geocodificação (`scripts/geocode-cache.json`) fica no repositório — só endereços novos são consultados de novo.

@@ -25,7 +25,25 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <div class="app">
+    <div id="login-gate" class="login-gate" hidden>
+      <form class="login-card" id="login-form">
+        <p class="eyebrow">Acesso restrito</p>
+        <h1>Mapa de escolas</h1>
+        <p class="lede">Entre com o e-mail autorizado da Dulino.</p>
+        <label>
+          E-mail
+          <input type="email" name="email" required autocomplete="username" placeholder="nome@dulino.com.br" />
+        </label>
+        <label>
+          Senha
+          <input type="password" name="password" required autocomplete="current-password" />
+        </label>
+        <p class="login-error" id="login-error" hidden></p>
+        <button type="submit" class="login-submit">Entrar</button>
+      </form>
+    </div>
+
+    <div class="app" id="app" hidden>
       <aside class="sidebar">
         <div class="sidebar-top">
           <header class="brand">
@@ -34,6 +52,10 @@
             <p class="lede">
               Prioridade = ticket ≥ R$ 300 (50 pts) + mais alunos (até 50 pts).
             </p>
+            <div class="session-bar">
+              <span id="session-email"></span>
+              <button type="button" class="btn-logout" id="logout-btn">Sair</button>
+            </div>
           </header>
 
           <section class="stats" id="stats"></section>
