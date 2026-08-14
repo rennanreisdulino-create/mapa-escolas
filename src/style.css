@@ -116,7 +116,14 @@ body {
   white-space: nowrap;
 }
 
-.btn-logout {
+.session-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+.btn-logout,
+.btn-refresh {
   flex-shrink: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -131,6 +138,16 @@ body {
 .btn-logout:hover {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+.btn-refresh:hover {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.btn-refresh:disabled {
+  opacity: 0.6;
+  cursor: wait;
 }
 
 .app {

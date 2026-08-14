@@ -41,6 +41,8 @@ Na primeira vez, o Vercel pede login no navegador. Depois disso você recebe um 
 
 **Alternativa sem CLI:** arraste a pasta `dist` em [app.netlify.com/drop](https://app.netlify.com/drop).
 
+No site, o botão **Atualizar planilha** baixa a planilha na hora e atualiza a lista/mapa (reaproveita as coordenadas já geocodificadas). Escolas novas sem CEP conhecido podem ficar sem pino até o próximo `npm run sync`.
+
 ## Atualizar dados
 
 **Automático:** uma GitHub Action roda **todo dia às 11h (Brasília)** e também pode ser disparada manualmente em *Actions → Sync planilha → Run workflow*. Se a planilha mudou, ela atualiza `public/escolas.json` e faz push no GitHub. Com Vercel conectado ao repo, o site redeploya sozinho.

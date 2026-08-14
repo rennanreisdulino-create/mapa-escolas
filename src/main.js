@@ -1,5 +1,6 @@
 import { downloadEscolaPdf, downloadIconSvg } from "./pdf.js";
 import { getSession, login, logout } from "./auth.js";
+import { payloadFromCsv } from "./sheet.js";
 
 const money = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -13,6 +14,7 @@ const loginError = document.querySelector("#login-error");
 const appEl = document.querySelector("#app");
 const sessionEmailEl = document.querySelector("#session-email");
 const logoutBtn = document.querySelector("#logout-btn");
+const refreshBtn = document.querySelector("#refresh-btn");
 
 let map;
 let heatLayer;
@@ -237,20 +239,62 @@ function initMapApp() {
   form.addEventListener("change", refresh);
 }
 
+function applyPayload(data, note) {
+  payload = data;
+  escolasById = new Map(payload.escolas.map((e) => [e.id, e]));
+  const cidadeAtual = form.elements.cidade.value;
+  fillCidades(payload.escolas);
+  if ([...cidadeSelect.options].some((opt) => opt.value === cidadeAtual)) {
+    form.elements.cidade.value = cidadeAtual;
+  }
+  geoNoteEl.textContent =
+    note ||
+    (payload.semCoordenada
+      ? `${payload.semCoordenada} escolas sem coordenada — confira endereço/CEP na planilha.`
+      : `${payload.comCoordenada} escolas no mapa · atualizado ${payload.updatedAt || ""}`);
+  refresh();
+  requestAnimationFrame(() => map.invalidateSize());
+}
+
 async function loadData() {
   const data = await fetch("/escolas.json").then((r) => {
     if (!r.ok) throw new Error("Não foi possível carregar escolas.json");
     return r.json();
   });
+  applyPayload(data);
+}
 
-  payload = data;
-  escolasById = new Map(payload.escolas.map((e) => [e.id, e]));
-  fillCidades(payload.escolas);
-  geoNoteEl.textContent = payload.semCoordenada
-    ? `${payload.semCoordenada} escolas sem coordenada — confira endereço/CEP na planilha.`
-    : `${payload.comCoordenada} escolas no mapa · atualizado ${payload.updatedAt || ""}`;
-  refresh();
-  requestAnimationFrame(() => map.invalidateSize());
+function formatUpdatedAt(iso) {
+  try {
+    return new Date(iso).toLocaleString("pt-BR");
+  } catch {
+    return iso || "";
+  }
+}
+
+async function refreshFromSheet() {
+  refreshBtn.disabled = true;
+  const previousLabel = refreshBtn.textContent;
+  refreshBtn.textContent = "Atualizando…";
+  try {
+    const res = await fetch("/api/sheet", { cache: "no-store" });
+    if (!res.ok) throw new Error("Não foi possível baixar a planilha agora.");
+    const csv = await res.text();
+    if (!csv || csv.trim().startsWith("<")) {
+      throw new Error("A planilha não retornou dados válidos.");
+    }
+    const data = payloadFromCsv(csv, payload.escolas || []);
+    applyPayload(
+      data,
+      `${data.comCoordenada} escolas no mapa · planilha atualizada ${formatUpdatedAt(data.updatedAt)}`
+    );
+  } catch (err) {
+    geoNoteEl.textContent = err.message || "Falha ao atualizar a planilha.";
+    console.error(err);
+  } finally {
+    refreshBtn.disabled = false;
+    refreshBtn.textContent = previousLabel;
+  }
 }
 
 async function enterApp(session) {
@@ -295,6 +339,10 @@ loginForm.addEventListener("submit", (event) => {
 logoutBtn.addEventListener("click", () => {
   logout();
   showLogin();
+});
+
+refreshBtn.addEventListener("click", () => {
+  refreshFromSheet();
 });
 
 const existing = getSession();

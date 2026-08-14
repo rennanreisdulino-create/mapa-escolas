@@ -2,100 +2,17 @@ import { writeFile, readFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  SHEET_CSV,
+  parseCsv,
+  rowsToSchools,
+  scoreSchools,
+} from "../src/sheet.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLIC = path.join(ROOT, "public");
 const CACHE_PATH = path.join(ROOT, "scripts", "geocode-cache.json");
-const SHEET_CSV =
-  "https://docs.google.com/spreadsheets/d/1s04lCnb1XQYq9PHb_3cZ66QS8aElfV-t/export?format=csv&gid=1028988662";
 const UA = "mapa-escolas/1.0 (heatmap de escolas prospectadas)";
-
-function parseCsv(text) {
-  const rows = [];
-  let row = [];
-  let cell = "";
-  let inQuotes = false;
-  const src = text.replace(/^\uFEFF/, "").replace(/\0/g, "");
-  for (let i = 0; i < src.length; i++) {
-    const ch = src[i];
-    const next = src[i + 1];
-    if (inQuotes) {
-      if (ch === '"' && next === '"') {
-        cell += '"';
-        i++;
-      } else if (ch === '"') {
-        inQuotes = false;
-      } else {
-        cell += ch;
-      }
-    } else if (ch === '"') {
-      inQuotes = true;
-    } else if (ch === ",") {
-      row.push(cell);
-      cell = "";
-    } else if (ch === "\n") {
-      row.push(cell.replace(/\r$/, ""));
-      rows.push(row);
-      row = [];
-      cell = "";
-    } else {
-      cell += ch;
-    }
-  }
-  if (cell.length || row.length) {
-    row.push(cell.replace(/\r$/, ""));
-    rows.push(row);
-  }
-  return rows.filter((r) => r.some((c) => c.trim()));
-}
-
-function clean(value) {
-  const text = String(value || "")
-    .replace(/\u00a0/g, " ")
-    .trim()
-    .replace(/\s+/g, " ");
-  if (["**", "*", "-", "—", "N/A", "n/a"].includes(text)) return "";
-  return text;
-}
-
-function parseNumber(value) {
-  let text = clean(value);
-  if (!text || text.includes("/")) return null;
-  text = text.replace("R$", "").replace(/ /g, "");
-  if (/\d+\.\d{3}/.test(text) && text.includes(",")) {
-    text = text.replace(/\./g, "").replace(",", ".");
-  } else if ((text.match(/,/g) || []).length === 1 && !text.includes(".")) {
-    text = text.replace(",", ".");
-  }
-  text = text.replace(/[^0-9.]/g, "");
-  if (!text) return null;
-  const number = Number(text);
-  return Number.isFinite(number) ? number : null;
-}
-
-function parseTicket(value) {
-  const number = parseNumber(value);
-  if (number == null || number <= 0 || number > 10000) return null;
-  return number;
-}
-
-function parseAlunos(value) {
-  const number = parseNumber(value);
-  if (number == null) return null;
-  return Math.round(number);
-}
-
-function digitsCep(value) {
-  return clean(value).replace(/\D/g, "").slice(0, 8);
-}
-
-function col(row, ...parts) {
-  for (const [key, value] of Object.entries(row)) {
-    const norm = (key || "").toUpperCase();
-    if (parts.every((part) => norm.includes(part.toUpperCase()))) return clean(value);
-  }
-  return "";
-}
 
 async function get(url, timeoutMs = 25000) {
   const ctrl = new AbortController();
@@ -124,6 +41,10 @@ async function saveCache(cache) {
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+function isCoordNaRegiao(lat, lng) {
+  return lat >= -8.7 && lat <= -7.3 && lng >= -35.55 && lng <= -34.7;
 }
 
 async function geocodeBrasilApi(cep) {
@@ -182,14 +103,12 @@ async function geocodeOne(school, cache) {
       const cached = cache[key];
       if (cached && isCoordNaRegiao(cached.lat, cached.lng)) return cached;
       if (cached && !isCoordNaRegiao(cached.lat, cached.lng)) {
-        // cache antigo com ponto fora da RMR — ignora
         continue;
       }
       return cached;
     }
   }
 
-  // Só "Pernambuco, Brasil" vira o centroide do estado — não geocodificar.
   const query = school.geoQuery || "";
   if (!school.cepDigits && /^pernambuco,\s*brasil$/i.test(query.trim())) {
     for (const key of keys) cache[key] = null;
@@ -216,115 +135,6 @@ async function geocodeOne(school, cache) {
 
   for (const key of keys) cache[key] = result;
   return result;
-}
-
-/** Escolas da rede pública / fora do fluxo comercial (estadual, municipal, EJA pública etc.). */
-function isEscolaPublica(school) {
-  const status = (school.status || "").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
-  const obs = (school.obs || "").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
-  const nome = (school.nome || "").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
-
-  if (/colegio estadual|colegio municipal|escola estadual|escola municipal|publico adulto/.test(status)) {
-    return true;
-  }
-  if (/^publica\b|\bppublica\b|\bpublica\b|\brede publica\b/.test(obs)) {
-    return true;
-  }
-  if (
-    /\b(escola|colegio)\s+(municipal|estadual)\b/.test(nome) ||
-    /\bescola tecnica estadual\b/.test(nome)
-  ) {
-    return true;
-  }
-  return false;
-}
-
-/** Linhas de resumo / lixo da planilha (não são escolas reais). */
-function isLinhaLixo(school) {
-  const nome = (school.nome || "").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().trim();
-  if (!nome) return true;
-  if (
-    /^(grupos? de divisao|grupo [a-d]|publico e privado|numerologia|total de escolas|quantas do grupo)/.test(
-      nome
-    )
-  ) {
-    return true;
-  }
-  const hasPlace = Boolean(school.endereco || school.bairro || school.cidade || school.cepDigits);
-  if (!hasPlace) return true;
-  return false;
-}
-
-/** RMR / litoral de PE — rejeita ponto no interior do estado (ex.: centroide "Pernambuco"). */
-function isCoordNaRegiao(lat, lng) {
-  return lat >= -8.7 && lat <= -7.3 && lng >= -35.55 && lng <= -34.7;
-}
-
-function rowsToSchools(rows) {
-  const headers = rows[0].map((h) => h.trim());
-  const schools = [];
-  let skippedPublic = 0;
-  let skippedJunk = 0;
-  for (let i = 1; i < rows.length; i++) {
-    const raw = {};
-    headers.forEach((h, idx) => {
-      raw[h] = rows[i][idx] || "";
-    });
-    const nome = col(raw, "GIOS") || col(raw, "COL");
-    if (!nome) continue;
-    const endereco = col(raw, "ENDERE");
-    const bairro = col(raw, "BAIRRO");
-    const cidade = col(raw, "CIDADE");
-    const cep = col(raw, "CEP");
-    const cepDigits = digitsCep(cep);
-    const queryParts = [endereco, bairro, cidade, "Pernambuco", "Brasil"].filter(Boolean);
-    let geoQuery = queryParts.join(", ");
-    if (cepDigits) geoQuery += `, ${cepDigits}`;
-    const school = {
-      id: i + 1,
-      nome,
-      endereco,
-      bairro,
-      cidade,
-      cep,
-      cepDigits,
-      telefone: col(raw, "TELEFONE"),
-      email: col(raw, "E-MAIL") || col(raw, "EMAIL"),
-      status: col(raw, "STATUS"),
-      grupo: col(raw, "Grupo") || col(raw, "GRUPO"),
-      obs: col(raw, "OBS"),
-      ticket: parseTicket(col(raw, "TICKET")),
-      alunos: parseAlunos(col(raw, "ALUNADO")),
-      geoQuery,
-    };
-    if (isLinhaLixo(school)) {
-      skippedJunk += 1;
-      continue;
-    }
-    if (isEscolaPublica(school)) {
-      skippedPublic += 1;
-      continue;
-    }
-    schools.push(school);
-  }
-  if (skippedJunk) {
-    console.log(`Ignoradas ${skippedJunk} linhas inválidas (resumo/sem endereço)`);
-  }
-  if (skippedPublic) {
-    console.log(`Ignoradas ${skippedPublic} escolas públicas (estadual/municipal/OBS pública/EJA etc.)`);
-  }
-  return schools;
-}
-
-function scoreSchools(schools) {
-  const alunosVals = schools.map((s) => s.alunos).filter((n) => n && n > 0);
-  const maxAlunos = alunosVals.length ? Math.max(...alunosVals) : 1;
-  for (const school of schools) {
-    const ticketPts = school.ticket != null && school.ticket >= 300 ? 50 : 0;
-    const alunosPts = school.alunos && school.alunos > 0 ? 50 * (school.alunos / maxAlunos) : 0;
-    school.score = Math.round((ticketPts + alunosPts) * 10) / 10;
-    school.ticketAlto = school.ticket != null && school.ticket >= 300;
-  }
 }
 
 async function main() {
